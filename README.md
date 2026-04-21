@@ -1,105 +1,231 @@
 # OSS Issue Watcher
 
-Get email notifications when new contribution-ready issues open on open source projects you care about — with a **Gemini AI analysis** attached as a CSV scoring each issue 1–10 and summarising exactly what needs to be done.
+Get **personalised email digests** of new open source issues — filtered by your difficulty range, tech areas, and capped at N issues — with a **Gemini AI score (1–10)**, plain-English summary of what to do, time estimate, and skill tags, attached as a CSV.
 
 ## How It Works
 
-- Runs every 4 hours via GitHub Actions (free, no server needed)
-- Checks 90+ repos for new issues matching beginner-to-intermediate labels
-- Tracks seen issues so you're never notified twice
-- Sends a formatted HTML email only when new issues appear
-- Calls **Gemini 2.5 Flash** to score each issue (1–10) and generate a plain-English summary of the fix — attached as a CSV
+1. Runs every 4 hours via GitHub Actions (free, no server)
+2. Checks 110+ repos for new issues across beginner → intermediate labels
+3. Sends all new issues to Gemini (`gemini-2.5-pro` by default) — scores each 1–10, summarises the fix, estimates effort, and tags required skills
+4. For each configured user: filters by their difficulty range + tech areas, sorts by score, caps at `max_issues`, sends a personalised HTML email with CSV attached
 
-## Currently Watching (90+ repos)
+---
+
+## Difficulty Levels
+
+Issues are tagged 1–10 based on the label used:
+
+| Level | Labels | What it means |
+| --- | --- | --- |
+| 1 | `good first issue`, `first-timers-only` | Typos, tiny fixes — absolute beginners |
+| 2 | `beginner`, `starter`, `low-hanging-fruit` | Simple but needs some code reading |
+| 3 | `documentation`, `docs`, `readme` | Writing/improving docs |
+| 4 | `help wanted`, `up-for-grabs`, `contributions welcome` | Well-scoped, maintainer wants help |
+| 5 | `hacktoberfest` | October event — usually beginner-welcoming |
+| 6 | `bug`, `enhancement`, `feature request` | Needs debugging or design sense |
+| 7 | `refactoring`, `tech-debt`, `cleanup` | Needs solid codebase understanding |
+| 8 | `needs-triage`, `needs-investigation` | Deep project context required |
+| 9 | `performance`, `security`, `vulnerability` | Domain expertise required |
+| 10 | `core`, `RFC`, `breaking-change` | Co-maintainer territory |
+
+> Set `difficulty_min` and `difficulty_max` to the **same value** to get only that exact level.
+> Set a range (e.g. `1–7`) to get everything up to that difficulty.
+
+---
+
+## Currently Watching (110+ repos)
 
 | Category | Repos |
 | --- | --- |
 | **Spring** | spring-boot · spring-kafka · spring-framework |
 | **Kafka / Messaging** | apache/kafka · kafka-ui · akhq · apache/dubbo · apache/pulsar |
 | **Streaming / Pipelines** | apache/flink · apache/beam · debezium · seata |
-| **Testing** | testcontainers-java · mockito · wiremock · junit5 · assertj |
+| **Testing** | testcontainers-java · mockito · wiremock · junit5 · assertj · allure2 |
 | **Auth / Identity** | keycloak · JanssenProject/jans |
 | **Cloud Native / Microservices** | quarkus · micronaut-core · helidon · vert.x · netty · ktor · armeria · kestra · dropwizard · grpc-java |
 | **API / Integration** | openapi-generator · mapstruct · OpenMetadata |
-| **Databases** | elasticsearch · OpenSearch · questdb · dbeaver · apache/doris · shardingsphere · crate · hazelcast · vespa · lettuce |
-| **SRE / Observability** | grafana · loki · tempo · prometheus · alertmanager · jaeger · opentelemetry-collector · opentelemetry-java · skywalking · micrometer · thanos · VictoriaMetrics · graylog2-server |
-| **Kubernetes / Infra** | kubernetes · ingress-nginx · cilium · cortex · argo-workflows · argo-cd · istio · helm · terraform |
-| **Build / Dev Tools** | gradle · bazel · jib · opengrok · checker-framework · liquibase · flyway |
-| **Static Analysis / Security** | spotbugs · find-sec-bugs · pmd · zaproxy · VulnerableApp |
-| **Libraries / JVM** | eclipse-collections · graphhopper · resilience4j · allure2 · openj9 · soot · guava |
-| **Data / Research** | data-transfer-project · OpenRefine · jabref |
+| **Databases** | elasticsearch · OpenSearch · questdb · dbeaver · apache/doris · shardingsphere · crate · hazelcast · vespa · lettuce · liquibase · flyway · etcd |
+| **SRE / Observability** | grafana · loki · tempo · prometheus · alertmanager · jaeger · opentelemetry-collector · opentelemetry-java · opentelemetry-go · skywalking · micrometer · thanos · VictoriaMetrics · graylog2-server · telegraf · vector |
+| **Kubernetes / Infra** | kubernetes · ingress-nginx · cilium · cortex · argo-workflows · argo-cd · istio · helm · terraform · traefik · flux2 · linkerd2 · moby · podman |
+| **Build / Dev Tools** | gradle · bazel · jib · opengrok · checker-framework · spotbugs · pmd · cargo |
+| **Security** | zaproxy · find-sec-bugs · keycloak · VulnerableApp |
+| **Go** | cli/cli · moby · podman · gitea · traefik · etcd · opentelemetry-go · grpc-go · gin · telegraf · flux2 · linkerd2 |
+| **Rust** | tokio · clap · cargo · nushell · vector · firecracker · actix-web · linkerd2 |
 | **Frontend / Other** | react · next.js · nest · fastapi · flask · AntennaPod · NewPipe |
-
-## Labels Watched
-
-Covers beginner to beginner-intermediate labels used across the ecosystem:
-
-`good first issue` · `help wanted` · `up for grabs` · `up-for-grabs` · `starter task` · `please contribute` · `contributions welcome` · `status: ideal-for-contribution` · `type/good-first-issue` · and more
 
 ---
 
-## Setup (~10 minutes)
+## Setup (~15 minutes)
 
 ### 1. Fork this repo
 
-Fork to your GitHub account. Keep it **public** — public repos get unlimited free Actions minutes.
+Keep it **public** — public repos get unlimited free Actions minutes.
 
-### 2. Add Secrets
+---
 
-Go to your fork → **Settings → Secrets and variables → Actions → New repository secret**
+### 2. Get a Gmail app password
 
-| Secret | Value | Required? |
+You need this before you can add the `SMTP_PASSWORD` secret.
+
+1. Sign in to [myaccount.google.com](https://myaccount.google.com) with the Gmail you want to **send from**
+2. Go to **Security → 2-Step Verification** and make sure it is **ON** (app passwords won't appear otherwise)
+3. Search **"App passwords"** in the search bar at the top
+4. Click **App passwords** → type a name like `oss-issue-watcher` → click **Create**
+5. Google shows a **16-character password** — copy it immediately, it's shown once only. Remove spaces when pasting.
+
+---
+
+### 3. Get a GitHub personal access token
+
+Used to avoid GitHub API rate limits when fetching issues.
+
+1. Go to [github.com/settings/tokens](https://github.com/settings/tokens) → **Fine-grained tokens → Generate new token**
+2. Name: `oss-issue-watcher`
+3. Repository access: **Public repositories (read-only)**
+4. Permissions: **Contents → Read-only**
+5. Click **Generate token** and copy it
+
+---
+
+### 4. Get a Gemini API key
+
+1. Go to [aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+2. Click **Create API key** → select any project (or create one)
+3. Copy the key — free tier, no billing required
+
+---
+
+### 5. Add Secrets
+
+Go to your fork: **Settings → Secrets and variables → Actions → Secrets tab → New repository secret**
+
+Add each of these:
+
+| Secret | Value |
+| --- | --- |
+| `SMTP_USERNAME` | The Gmail address you're sending from (e.g. `you@gmail.com`) |
+| `SMTP_PASSWORD` | The 16-char app password from step 2 |
+| `GH_TOKEN` | The token from step 3 |
+| `NOTIFY_EMAIL` | Your receiving email — only needed if you skip step 6 below |
+
+**Set exactly one AI provider key** (checked in priority order):
+
+| Secret | Provider | Default model | Free tier? |
+| --- | --- | --- | --- |
+| `GOOGLE_SA_JSON` | Vertex AI (GCP service account JSON) | `gemini-2.5-pro` | GCP credits |
+| `GEMINI_API_KEY` | Google AI Studio | `gemini-2.0-flash` | Yes (500 req/day) |
+| `OPENAI_API_KEY` | OpenAI | `gpt-4o-mini` | $5 free trial |
+| `ANTHROPIC_API_KEY` | Anthropic / Claude | `claude-haiku-4-5-20251001` | $5 free trial |
+
+Optionally set `AI_MODEL` to override the default model for whichever provider you chose (e.g. `gemini-2.5-flash`, `gpt-4o`, `claude-sonnet-4-6`).
+
+---
+
+### 6. Configure who gets what (Variables)
+
+Go to your fork: **Settings → Secrets and variables → Actions → Variables tab → New repository variable**
+
+#### Option A — Multi-user JSON (recommended)
+
+Create one variable named `USER_CONFIGS` with a JSON array — one object per recipient:
+
+```json
+[
+  {
+    "email": "you@gmail.com",
+    "name": "Your Name",
+    "max_issues": 5,
+    "difficulty_min": 1,
+    "difficulty_max": 7,
+    "areas": ["SRE", "Java", "Kubernetes", "Observability", "Testing"]
+  }
+]
+```
+
+Add more objects to the array for more recipients — each gets a filtered email based on their own prefs.
+
+**All supported areas:**
+
+| Area | What's covered |
+| --- | --- |
+| `Java` | Any Java repo (broadest filter — catches everything) |
+| `Spring` | spring-boot, spring-framework, spring-kafka |
+| `Backend` | quarkus, micronaut, helidon, vert.x, netty, armeria, dropwizard, grpc-java, resilience4j |
+| `Kotlin` | ktor |
+| `Messaging` | apache/kafka, kafka-ui, akhq, apache/pulsar, apache/dubbo |
+| `Streaming` | apache/flink, apache/beam, debezium |
+| `Testing` | testcontainers-java, mockito, wiremock, junit5, assertj, allure2 |
+| `Security` | keycloak, jans, zaproxy, find-sec-bugs, VulnerableApp |
+| `SRE` | grafana, loki, tempo, prometheus, alertmanager, jaeger, opentelemetry, thanos, VictoriaMetrics, kubernetes, cilium, argo-cd, argo-workflows, istio, helm, terraform, skywalking, micrometer, graylog2 |
+| `Observability` | grafana, loki, tempo, prometheus, jaeger, opentelemetry, thanos, VictoriaMetrics, skywalking, micrometer, cortex, graylog2 |
+| `Kubernetes` | kubernetes, ingress-nginx, cilium, argo-workflows, argo-cd, istio, helm, jib |
+| `IaC` | terraform |
+| `Databases` | elasticsearch, OpenSearch, questdb, dbeaver, doris, shardingsphere, crate, hazelcast, vespa, lettuce, liquibase, flyway, OpenMetadata |
+| `Search` | elasticsearch, OpenSearch, vespa |
+| `Workflow` | kestra, camunda |
+| `Cloud Native` | nacos, Sentinel |
+| `Distributed` | seata |
+| `Build` | gradle, bazel, jib, spotbugs, pmd, checker-framework |
+| `Tools` | dbeaver, opengrok |
+| `API` | openapi-generator, mapstruct |
+| `Data` | OpenRefine |
+| `Frontend` | react, next.js |
+| `JavaScript` | react, next.js, nest |
+| `Python` | fastapi, flask |
+| `Mobile` | AntennaPod, NewPipe |
+| `Android` | AntennaPod, NewPipe |
+| `Go` | cli/cli, moby, podman, gitea, traefik, etcd, opentelemetry-go, grpc-go, gin, telegraf, flux2, linkerd2 |
+| `Rust` | tokio, clap, cargo, nushell, vector, firecracker, actix-web, linkerd2 |
+
+> **Tip:** Set `difficulty_min` and `difficulty_max` to the same number for an exact level only (e.g. both `4` = only `help wanted` issues). Set a range like `1–7` to get everything up to that difficulty.
+
+#### Option B — Single user (simpler, no JSON)
+
+Skip `USER_CONFIGS` and set these individual variables instead:
+
+| Variable | Example | What it does |
 | --- | --- | --- |
-| `SMTP_PASSWORD` | Gmail app password (see below) | **Yes** |
-| `GEMINI_API_KEY` | From [aistudio.google.com/apikey](https://aistudio.google.com/apikey) | **Yes** |
-| `GH_TOKEN` | GitHub token with `public_repo` scope | Recommended |
-| `SMTP_USERNAME` | Your sending Gmail address | Optional — default: `namanmahit@gmail.com` |
-| `NOTIFY_EMAIL` | Recipient(s) — comma-separated for multiple | Optional — default: `namanworkie@gmail.com` |
-| `GEMINI_MODEL` | e.g. `gemini-2.5-flash` | Optional — default: `gemini-2.0-flash` |
+| `NOTIFY_NAME` | `Naman` | Name in the email greeting |
+| `MAX_ISSUES` | `5` | Max issues per email |
+| `DIFFICULTY_MIN` | `1` | Minimum difficulty (1–10) |
+| `DIFFICULTY_MAX` | `7` | Maximum difficulty (1–10) |
+| `AREAS` | `SRE,Java,Kubernetes` | Comma-separated areas to watch |
 
-#### Getting your Gmail app password
+The `NOTIFY_EMAIL` secret from step 5 is used as the recipient.
 
-1. Sign in to [myaccount.google.com](https://myaccount.google.com)
-2. **Security → 2-Step Verification** — must be ON
-3. Search **"App passwords"** at the top → create one named `oss-issue-watcher`
-4. Copy the 16-char password (shown once) — paste as `SMTP_PASSWORD`, no spaces
+---
 
-#### Getting a GitHub token
+### 7. (Optional) Change the Gemini model
 
-[github.com/settings/tokens](https://github.com/settings/tokens) → Fine-grained token → `contents: read` scope only
+Add a **secret** `GEMINI_MODEL` = `gemini-2.5-flash` for better analysis quality.
+Default is `gemini-2.0-flash`. Both are free tier — cron uses only 6 requests/day, well within limits.
 
-#### Getting a Gemini API key
+---
 
-[aistudio.google.com/apikey](https://aistudio.google.com/apikey) → Create API key → free tier, no billing needed
+### 8. Test it
 
-**Recommended model:** `gemini-2.5-flash` — best reasoning quality on free tier (500 req/day; cron uses 6/day)
+Go to: **Actions → OSS Issue Watcher → Run workflow → Run workflow**
 
-### 3. Test it
+The Actions log prints every repo checked, issues found, Gemini result, and email delivery status. Check your inbox within ~60 seconds.
 
-Go to **Actions → OSS Issue Watcher → Run workflow** → click **Run workflow**.
-
-Check the Actions log — it prints every repo checked, every new issue found, and whether the Gemini call and email succeeded. Check your inbox within ~60 seconds.
-
-> **First run tip:** `seen_issues.json` starts empty, so the first run will notify you of all currently open matching issues. This is expected. After that, only new issues trigger emails.
+> **First run note:** `seen_issues.json` starts empty so you'll be notified of all currently open matching issues. After that, only new issues trigger emails.
 
 ---
 
 ## Testing Locally
 
 ```bash
-# Set env vars
 export GH_TOKEN=your_token
-export SMTP_USERNAME=namanmahit@gmail.com
+export SMTP_USERNAME=you@gmail.com
 export SMTP_PASSWORD=your_app_password
-export NOTIFY_EMAIL=namanworkie@gmail.com
 export GEMINI_API_KEY=your_gemini_key
 export GEMINI_MODEL=gemini-2.5-flash
+export USER_CONFIGS='[{"email":"you@gmail.com","name":"You","max_issues":5,"difficulty_min":1,"difficulty_max":7,"areas":["SRE","Java"]}]'
 
-# Run
 python check_issues.py
 ```
 
-To force a fresh run (re-notify all current issues):
+Force a fresh run (re-notify all current issues):
 
 ```bash
 rm -f seen_issues.json && python check_issues.py
@@ -107,21 +233,37 @@ rm -f seen_issues.json && python check_issues.py
 
 ---
 
-## Add / Remove Repos
+## Adding More Repos
 
-Edit [`repos.json`](repos.json). Each entry is:
+Edit [`repos.json`](repos.json) and add an entry anywhere in the array:
 
 ```json
-{ "owner": "apache", "repo": "kafka", "labels": ["good first issue", "help wanted"] }
+{ "owner": "OWNER", "repo": "REPO", "labels": ["good first issue", "help wanted"], "areas": ["Go", "Backend"] }
 ```
 
-Multiple labels = multiple API calls per repo, each deduped before emailing.
+**Fields:**
+
+- `owner` — GitHub org or username (e.g. `"golang"`)
+- `repo` — repo name exactly as it appears on GitHub (e.g. `"go"`)
+- `labels` — one API call is made per label, so list every label the repo uses for beginner issues. Check the repo's Labels page on GitHub to find the exact text.
+- `areas` — controls which users receive issues from this repo. Must match values in a user's `areas` list in `USER_CONFIGS`. Use existing areas or invent new ones — just make sure to add the same value to the relevant user configs too.
+
+**Finding the right labels for a repo:**
+Go to `github.com/OWNER/REPO/labels` and look for anything like `good first issue`, `help wanted`, `up for grabs`, `beginner`, `starter`, etc. Copy the label text exactly — casing matters.
+
+**Example — adding golang/go:**
+
+```json
+{ "owner": "golang", "repo": "go", "labels": ["good first issue", "help wanted"], "areas": ["Go", "Backend"] }
+```
+
+Commit the change and push — the next workflow run picks it up automatically.
 
 ---
 
 ## Claiming an Issue
 
-See [`CLAIMING_ISSUES.md`](CLAIMING_ISSUES.md) for the full workflow — from reading the Gemini CSV to opening a draft PR.
+See [`CLAIMING_ISSUES.md`](CLAIMING_ISSUES.md) — covers everything from reading the CSV to opening a draft PR.
 
 ---
 
@@ -131,20 +273,23 @@ See [`CLAIMING_ISSUES.md`](CLAIMING_ISSUES.md) for the full workflow — from re
 No. Each issue ID is stored in `seen_issues.json` — once notified, never again.
 
 **What if Gemini fails?**
-The email still sends without the CSV attachment. Gemini errors are logged in the Actions run.
+Email still sends using label-based difficulty scores. Gemini errors are logged in the Actions run.
 
-**Can I send to multiple people?**
-Yes — set `NOTIFY_EMAIL` to `email1@gmail.com,email2@gmail.com`.
+**Same difficulty_min and difficulty_max?**
+Valid — e.g. both `4` means only `help wanted` issues. Both `6` means only `bug`/`enhancement` issues.
+
+**No issues matched my filters?**
+The log will say "No matching issues — skipping email." Either widen your difficulty range, add more areas, or wait for the next cron tick.
 
 **The workflow stopped running?**
-GitHub disables scheduled Actions after 60 days of repo inactivity. Push any commit or trigger manually to re-enable.
+GitHub disables scheduled Actions after 60 days of repo inactivity. Push any commit or trigger manually.
 
 **How do I change the frequency?**
 Edit `.github/workflows/watch-issues.yml`:
 
 ```yaml
 - cron: '0 */4 * * *'   # every 4 hours (default)
-- cron: '0 */6 * * *'   # every 6 hours
+- cron: '0 */2 * * *'   # every 2 hours
 - cron: '0 8 * * *'     # once daily at 8am UTC
 ```
 
